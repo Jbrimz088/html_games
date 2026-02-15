@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>G-Force Gus - High Score</title>
+    <title>G-Force Gus - Extreme</title>
     <style>
         body { margin: 0; background: #1a1a1a; color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         #game-container { position: relative; }
@@ -12,7 +12,7 @@
         .stat { font-size: 1.2rem; font-weight: bold; }
         #high-score { color: #f1c40f; }
         #current-rpm { color: #00ff00; }
-        canvas { background: radial-gradient(#444, #222); border-radius: 50%; border: 8px solid #333; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        canvas { background: radial-gradient(#444, #222); border-radius: 50%; border: 8px solid #333; }
     </style>
 </head>
 <body>
@@ -30,7 +30,7 @@
         <canvas id="gameCanvas" width="450" height="450"></canvas>
     </div>
 
-    <p style="margin-top:20px; color:#777;">MASH <kbd>A</kbd> and <kbd>D</kbd> TO SPIN</p>
+    <p style="margin-top:20px; color:#777;">MASH <kbd>A</kbd> and <kbd>D</kbd> | DON'T LET HIM BLOW!</p>
 
 <script>
     const canvas = document.getElementById("gameCanvas");
@@ -39,12 +39,12 @@
     const hsEl = document.getElementById("high-score");
     const nauseaBar = document.getElementById("nausea-bar");
 
-    // Load Texture
-    const gusImg = new Image();
-    gusImg.src = 'gus.png'; 
-    // Fallback if image doesn't exist
-    let imgLoaded = false;
-    gusImg.onload = () => imgLoaded = true;
+    // Load Textures
+    const gusNormal = new Image();
+    gusNormal.src = 'gus.png';
+    
+    const gusSick = new Image();
+    gusSick.src = 'throwupgus.png';
 
     let rotation = 0;
     let speed = 0;
@@ -52,14 +52,14 @@
     let lastKey = "";
     let gameActive = true;
     
-    // Initialize High Score
     let highScore = localStorage.getItem("gusHighScore") || 0;
     hsEl.innerText = highScore;
 
     window.addEventListener("keydown", (e) => {
         if (!gameActive) return;
+        // Mashing build-up
         if ((e.code === "KeyA" && lastKey !== "KeyA") || (e.code === "KeyD" && lastKey !== "KeyD")) {
-            speed += 0.6;
+            speed += 0.8; // Increased boost per click
             lastKey = e.code;
         }
     });
@@ -69,25 +69,25 @@
         ctx.translate(canvas.width/2, canvas.height/2);
         ctx.rotate(angle);
 
-        // Draw the spinning arm
-        ctx.strokeStyle = "#555";
-        ctx.lineWidth = 10;
+        // Draw spinning bar
+        ctx.strokeStyle = "#444";
+        ctx.lineWidth = 12;
         ctx.beginPath();
         ctx.moveTo(-180, 0);
         ctx.lineTo(180, 0);
         ctx.stroke();
 
-        // Draw Gus (The Texture)
-        const gusSize = 80;
-        if (imgLoaded) {
-            // Draws the image centered at the end of the arm
-            ctx.drawImage(gusImg, 120 - gusSize/2, -gusSize/2, gusSize, gusSize);
-        } else {
-            // Placeholder if gus.png is missing
-            ctx.fillStyle = nausea > 75 ? "#82ccdd" : "#ffdbac";
-            ctx.fillRect(120 - 20, -20, 40, 40);
-            ctx.fillStyle = "black";
-            ctx.fillText("MISSING PNG", 100, 40);
+        // Texture Swap Logic
+        const gusSize = 100;
+        let currentTexture = (nausea > 75) ? gusSick : gusNormal;
+
+        // Draw the active texture
+        try {
+            ctx.drawImage(currentTexture, 120 - gusSize/2, -gusSize/2, gusSize, gusSize);
+        } catch(e) {
+            // Fallback if images aren't found
+            ctx.fillStyle = (nausea > 75) ? "green" : "flesh";
+            ctx.fillRect(100, -20, 40, 40);
         }
 
         ctx.restore();
@@ -96,23 +96,24 @@
     function update() {
         if (!gameActive) return;
 
-        speed *= 0.985; // Friction
+        speed *= 0.985; // Friction (air resistance)
         rotation += speed * 0.1;
 
-        // Nausea builds faster as speed increases
-        if (speed > 4) {
-            nausea += (speed * 0.06);
+        // Nausea calculation
+        if (speed > 3) {
+            nausea += (speed * 0.05); 
         } else {
-            nausea -= 0.4;
+            nausea -= 0.6; // Recovery speed
         }
 
         nausea = Math.min(Math.max(0, nausea), 100);
         nauseaBar.style.width = nausea + "%";
         
-        let currentRPM = Math.floor(speed * 10);
+        // RPM Calculation (speed * factor)
+        // We'll use 15 as a factor to make the numbers look like real RPMs
+        let currentRPM = Math.floor(speed * 15); 
         rpmEl.innerText = currentRPM;
 
-        // Update High Score Live
         if (currentRPM > highScore) {
             highScore = currentRPM;
             localStorage.setItem("gusHighScore", highScore);
@@ -122,7 +123,7 @@
         if (nausea >= 100) {
             gameActive = false;
             setTimeout(() => {
-                alert("GAME OVER! Gus painted the town green. Max RPM: " + currentRPM);
+                alert("BLEUGH! Total Disaster. Max RPM: " + currentRPM);
                 location.reload();
             }, 100);
         }
