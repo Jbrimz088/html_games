@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Brick Buster - Pro</title>
+    <style>
+        body { 
+            background: #111; 
+            display: flex; 
+            flex-direction: column;
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            font-family: 'Segoe UI', sans-serif; 
+            color: white;
+        }
+        .header { text-align: center; margin-bottom: 10px; }
+        .game-container { display: flex; gap: 20px; align-items: flex-start; }
+        
+        canvas { background: #000; border: 4px solid #444; cursor: crosshair; }
+        
+        .sidebar { 
+            background: #222; 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px solid #444;
+            min-width: 180px;
+        }
+        .stat-box { margin-bottom: 15px; font-size: 1.1rem; }
+        .stat-label { color: #888; font-size: 0.8rem; text-transform: uppercase; display: block; }
+        .stat-value { color: #00ffff; font-weight: bold; font-size: 1.4rem; }
+        
+        #leaderboard { list-style: none; padding: 0; margin-top: 10px; }
+        #leaderboard li { 
+            padding: 5px 0; 
+            border-bottom: 1px solid #333; 
+            display: flex; 
+            justify-content: space-between;
+            font-size: 0.9rem;
+        }
+        kbd { background: #444; padding: 2px 5px; border-radius: 3px; color: #00ffff; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>BRICK BUSTER</h1>
+        <p>Move: <kbd>A</kbd> and <kbd>D</kbd></p>
+    </div>
+
+    <div class="game-container">
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+        <div class="sidebar">
+            <div class="stat-box">
+                <span class="stat-label">Score</span>
+                <span id="score" class="stat-value">0</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Time</span>
+                <span id="timer" class="stat-value">0.0s</span>
+            </div>
+            <hr style="border:0; border-top:1px solid #444">
+            <div class="stat-box">
+                <span class="stat-label">Local Leaderboard</span>
+                <ul id="leaderboard"></ul>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    
+    // UI Elements
+    const scoreDisplay = document.getElementById("score");
+    const timerDisplay = document.getElementById("timer");
+    const leaderboardUI = document.getElementById("leaderboard");
+
+    // Game State
+    let score = 0;
+    let startTime = Date.now();
+    let gameActive = true;
+    let ballRadius = 8;
+    let x = canvas.width / 2;
+    let y = canvas.height - 35;
+    let dx = 3;
+    let dy = -3;
+    
+    const paddleHeight = 12;
+    const paddleWidth = 100;
+    let paddleX = (canvas.width - paddleWidth) / 2;
+    let dPressed = false;
+    let aPressed = false;
+
+    const rowCount = 5;
+    const colCount = 7;
+    const bricks = [];
+    for(let c=0; c<colCount; c++) {
+        bricks[c] = [];
+        for(let r=0; r<rowCount; r++) {
+            bricks[c][r] = { x: 0, y: 0, status: 1 };
+        }
+    }
+
+    document.addEventListener("keydown", (e) => {
+        if(e.code === "KeyD") dPressed = true;
+        if(e.code === "KeyA") aPressed = true;
+    });
+    document.addEventListener("keyup", (e) => {
+        if(e.code === "KeyD") dPressed = false;
+        if(e.code === "KeyA") aPressed = false;
+    });
+
+    function updateLeaderboard(newScore) {
+        let scores = JSON.parse(localStorage.getItem("brickScores") || "[]");
+        scores.push({score: Math.floor(newScore), date: new Date().toLocaleDateString()});
+        scores.sort((a, b) => b.score - a.score);
+        scores = scores.slice(0, 5); // Keep top 5
+        localStorage.setItem("brickScores", JSON.stringify(scores));
+        displayLeaderboard();
+    }
+
+    function displayLeaderboard() {
+        let scores = JSON.parse(localStorage.getItem("brickScores") || "[]");
+        leaderboardUI.innerHTML = scores.map(s => `<li><span>${s.date}</span> <b>${s.score}</b></li>`).join('');
+    }
+
+    function collisionDetection() {
+        for(let c=0; c<colCount; c++) {
+            for(let r=0; r<rowCount; r++) {
+                let b = bricks[c][r];
+                if(b.status == 1) {
+                    if(x > b.x && x < b.x + 72 && y > b.y && y < b.y + 22) {
+                        dy = -dy;
+                        b.status = 0;
+                        score += 10;
+                        scoreDisplay.innerText = score;
+                    }
+                }
+            }
+        }
+    }
+
+    function draw() {
+        if(!gameActive) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Timer update
+        timerDisplay.innerText = ((Date.now() - startTime) / 1000).toFixed(1) + "s";
+
+        // Draw Bricks
+        for(let c=0; c<colCount; c++) {
+            for(let r=0; r<rowCount; r++) {
+                if(bricks[c][r].status == 1) {
+                    let bx = (c * 82) + 15;
+                    let by = (r * 32) + 40;
+                    bricks[c][r].x = bx;
+                    bricks[c][r].y = by;
+                    ctx.fillStyle = `hsl(${c * 45}, 70%, 50%)`;
+                    ctx.fillRect(bx, by, 72, 22);
+                }
+            }
+        }
+
+        // Draw Ball & Paddle
+        ctx.beginPath(); ctx.arc(x, y, ballRadius, 0, Math.PI*2); ctx.fillStyle = "#fff"; ctx.fill(); ctx.closePath();
+        ctx.fillStyle = "#00ffff"; ctx.fillRect(paddleX, canvas.height-20, paddleWidth, paddleHeight);
+
+        collisionDetection();
+
+        if(x + dx > canvas.width-ballRadius || x + dx < ballRadius) dx = -dx;
+        if(y + dy < ballRadius) dy = -dy;
+        else if(y + dy > canvas.height-ballRadius-10) {
+            if(x > paddleX && x < paddleX + paddleWidth) {
+                dy = -dy;
+                dx *= 1.02; dy *= 1.02; // Speed up
+            } else {
+                gameActive = false;
+                updateLeaderboard(score);
+                alert("GAME OVER! Final Score: " + score);
+                document.location.reload();
+            }
+        }
+
+        if(dPressed && paddleX < canvas.width-paddleWidth) paddleX += 8;
+        else if(aPressed && paddleX > 0) paddleX -= 8;
+
+        x += dx; y += dy;
+        requestAnimationFrame(draw);
+    }
+
+    displayLeaderboard();
+    draw();
+</script>
+</body>
+</html>
